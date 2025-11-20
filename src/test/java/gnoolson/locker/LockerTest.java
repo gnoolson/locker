@@ -17,7 +17,7 @@ class LockerTest {
 
     @RepeatedTest(value = 64, name = "{currentRepetition}/{totalRepetitions}")
     public void many_lockers() throws InterruptedException {
-        Locker mcl = new OptimisticLocalLocker();
+        Locker locker = new OptimisticLocalLocker();
 
         Counter c1 = new Counter(String.valueOf(1));
         Counter c2 = new Counter(String.valueOf(2));
@@ -30,12 +30,12 @@ class LockerTest {
 
         CountDownLatch cdl = new CountDownLatch(threads * 6);
 
-        beginChanges(ex, mcl, cdl, c1, c2, c3, c4, c5);
-        beginChanges(ex, mcl, cdl, c2, c3, c4, c5, c6);
-        beginChanges(ex, mcl, cdl, c3, c4, c5, c6, c1);
-        beginChanges(ex, mcl, cdl, c4, c5, c6, c1, c2);
-        beginChanges(ex, mcl, cdl, c5, c6, c1, c2, c3);
-        beginChanges(ex, mcl, cdl, c6, c1, c2, c3, c4);
+        beginChanges(ex, locker, cdl, c1, c2, c3, c4, c5);
+        beginChanges(ex, locker, cdl, c2, c3, c4, c5, c6);
+        beginChanges(ex, locker, cdl, c3, c4, c5, c6, c1);
+        beginChanges(ex, locker, cdl, c4, c5, c6, c1, c2);
+        beginChanges(ex, locker, cdl, c5, c6, c1, c2, c3);
+        beginChanges(ex, locker, cdl, c6, c1, c2, c3, c4);
 
         cdl.await();
         ex.shutdownNow();
@@ -46,36 +46,36 @@ class LockerTest {
         assertEquals(threads * 5, c4.value);
         assertEquals(threads * 5, c5.value);
         assertEquals(threads * 5, c6.value);
-        assertFalse(mcl.hasLockedTreads());
+        assertFalse(locker.hasLockedTreads());
     }
 
     @RepeatedTest(value = 64, name = "{currentRepetition}/{totalRepetitions}")
     public void single_locker() throws InterruptedException {
-        Locker mcl = new OptimisticLocalLocker();
+        Locker locker = new OptimisticLocalLocker();
 
         Counter c1 = new Counter(String.valueOf(1));
         ExecutorService ex = Executors.newCachedThreadPool();
         CountDownLatch cdl = new CountDownLatch(threads * 6);
 
-        beginChanges(ex, mcl, cdl, c1);
-        beginChanges(ex, mcl, cdl, c1);
-        beginChanges(ex, mcl, cdl, c1);
-        beginChanges(ex, mcl, cdl, c1);
-        beginChanges(ex, mcl, cdl, c1);
-        beginChanges(ex, mcl, cdl, c1);
+        beginChanges(ex, locker, cdl, c1);
+        beginChanges(ex, locker, cdl, c1);
+        beginChanges(ex, locker, cdl, c1);
+        beginChanges(ex, locker, cdl, c1);
+        beginChanges(ex, locker, cdl, c1);
+        beginChanges(ex, locker, cdl, c1);
 
         cdl.await();
         ex.shutdownNow();
 
         assertEquals(384, c1.value);
-        assertFalse(mcl.hasLockedTreads());
+        assertFalse(locker.hasLockedTreads());
     }
 
     /*
      *
      *
      * */
-    void beginChanges(ExecutorService ex, Locker mcl, CountDownLatch cdl, Counter... counters) {
+    void beginChanges(ExecutorService ex, Locker locker, CountDownLatch cdl, Counter... counters) {
 
         String[] ids = Stream.of(counters).map((counter) -> {
             return counter.id;
@@ -86,7 +86,7 @@ class LockerTest {
                 ex.submit(() -> {
                     try {
                         Thread.sleep(1L);
-                        try (Locker.LockedIds key = mcl.lock(ids)) {
+                        try (Locker.LockedIds key = locker.lock(ids)) {
                             for (Counter counter : counters) {
                                 counter.inc();
                             }

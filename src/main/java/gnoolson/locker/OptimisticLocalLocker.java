@@ -8,30 +8,38 @@ public class OptimisticLocalLocker implements Locker {
 
     private final ReentrantLock innerLock = new ReentrantLock();
     private final Map<String, XLock> allLockedIds = new HashMap<>();
-    private final int minimumWaitingTimeForTry;
-    private final int maximumWaitingTimeForTry;
-    private final long maximumWaitingTimeForLock;
+    private final long minimumWaitTimeBeforeNewLockAttempt;
+    private final long maximumWaitTimeBeforeNewLockAttempt;
+    private final long maximumLockAttemptTime;
 
     /*
      *
      *
      * */
     public OptimisticLocalLocker() {
-        this.minimumWaitingTimeForTry = 1;  // 1ms
-        this.maximumWaitingTimeForTry = 10; // 10ms
-        this.maximumWaitingTimeForLock = 2000; // 2000ms
+        this(1, 10, 500);
     }
 
-    public OptimisticLocalLocker(int minimumWaitingTimeForTry, int maximumWaitingTimeForTry, long maximumWaitingTimeForLock) {
-        this.minimumWaitingTimeForTry = minimumWaitingTimeForTry;
-        this.maximumWaitingTimeForTry = maximumWaitingTimeForTry;
-        this.maximumWaitingTimeForLock = maximumWaitingTimeForLock;
+    public OptimisticLocalLocker(long waitingTimeForTry, long maximumLockAttemptTime) {
+        this(waitingTimeForTry, waitingTimeForTry, maximumLockAttemptTime);
     }
 
-    public OptimisticLocalLocker(int waitingTimeForTry, long maximumWaitingTimeForLock) {
-        this.minimumWaitingTimeForTry = waitingTimeForTry;
-        this.maximumWaitingTimeForTry = waitingTimeForTry;
-        this.maximumWaitingTimeForLock = maximumWaitingTimeForLock;
+    public OptimisticLocalLocker(long minimumWaitTimeBeforeNewLockAttempt, long maximumWaitTimeBeforeNewLockAttempt, long maximumLockAttemptTime) {
+        if (minimumWaitTimeBeforeNewLockAttempt < 1)
+            throw new RuntimeException("The minimum time is less than 1 ms");
+
+        if (maximumWaitTimeBeforeNewLockAttempt < 1)
+            throw new RuntimeException("The maximum time is less than 1 ms");
+
+        if (maximumLockAttemptTime < 1)
+            throw new RuntimeException("The maximum lock attempt time is less than 1 ms");
+
+        if (minimumWaitTimeBeforeNewLockAttempt > maximumWaitTimeBeforeNewLockAttempt)
+            throw new RuntimeException("The minimum time is greater than the maximum time");
+
+        this.minimumWaitTimeBeforeNewLockAttempt = minimumWaitTimeBeforeNewLockAttempt;
+        this.maximumWaitTimeBeforeNewLockAttempt = maximumWaitTimeBeforeNewLockAttempt;
+        this.maximumLockAttemptTime = maximumLockAttemptTime;
     }
 
     @Override
@@ -47,7 +55,7 @@ public class OptimisticLocalLocker implements Locker {
                 long sleepTime = this.generateSleepTime();
                 totalSleepTime += sleepTime;
 
-                if(totalSleepTime >= this.maximumWaitingTimeForLock)
+                if (totalSleepTime >= this.maximumLockAttemptTime)
                     throw new RuntimeException(String.format("Could not lock. Too much time to try (%dms)", totalSleepTime));
 
                 this.sleep(sleepTime);
@@ -87,10 +95,10 @@ public class OptimisticLocalLocker implements Locker {
      *
      * */
     private long generateSleepTime() {
-        if(this.maximumWaitingTimeForTry == this.minimumWaitingTimeForTry)
-            return this.maximumWaitingTimeForTry;
+        if (this.maximumWaitTimeBeforeNewLockAttempt == this.minimumWaitTimeBeforeNewLockAttempt)
+            return this.maximumWaitTimeBeforeNewLockAttempt;
 
-        return (long) ((Math.random() * (this.maximumWaitingTimeForTry - this.minimumWaitingTimeForTry)) + this.minimumWaitingTimeForTry);
+        return (long) ((Math.random() * (this.maximumWaitTimeBeforeNewLockAttempt - this.minimumWaitTimeBeforeNewLockAttempt)) + this.minimumWaitTimeBeforeNewLockAttempt);
     }
 
     private void remove(XLock xLock) {
@@ -145,8 +153,7 @@ public class OptimisticLocalLocker implements Locker {
 
         public void unlock() {
             this.threads.remove(Thread.currentThread().getId());
-            if (!this.rl.hasQueuedThreads() && this.threads.isEmpty())
-                OptimisticLocalLocker.this.remove(this);
+            if (!this.rl.hasQueuedThreads() && this.threads.isEmpty()) OptimisticLocalLocker.this.remove(this);
 
             rl.unlock();
         }
