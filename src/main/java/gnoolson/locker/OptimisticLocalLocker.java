@@ -7,7 +7,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class OptimisticLocalLocker implements Locker {
 
     private final ReentrantLock innerLock = new ReentrantLock();
-    private final Map<String, XLock> allLockedIds = new HashMap<>();
+    private final Map<String, XLock> allLockedKeys = new HashMap<>();
     private final long minimumWaitTimeBeforeNewLockAttempt;
     private final long maximumWaitTimeBeforeNewLockAttempt;
     private final long maximumLockAttemptTime;
@@ -17,7 +17,7 @@ public class OptimisticLocalLocker implements Locker {
      *
      * */
     public OptimisticLocalLocker() {
-        this(1, 10, 500);
+        this(1, 10, 1000);
     }
 
     public OptimisticLocalLocker(long waitingTimeForTry, long maximumLockAttemptTime) {
@@ -43,15 +43,15 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     @Override
-    public LockedIds lock(String... keys) {
+    public LockedKeys lock(String... keys) {
         boolean retry = false;
-        List<XLock> ids = new ArrayList<>(keys.length);
+        List<XLock> lockedKeys = new ArrayList<>(keys.length);
         long totalSleepTime = 0;
 
         do {
             boolean fail = false;
             if (retry) {
-                ids.clear();
+                lockedKeys.clear();
                 long sleepTime = this.generateSleepTime();
                 totalSleepTime += sleepTime;
 
@@ -61,13 +61,13 @@ public class OptimisticLocalLocker implements Locker {
                 this.sleep(sleepTime);
             }
 
-            for (String id : keys) {
-                XLock xlock = this.getXLock(id);
+            for (String key : keys) {
+                XLock xlock = this.getXLock(key);
                 if (xlock.tryLock()) {
-                    ids.add(xlock);
+                    lockedKeys.add(xlock);
                 } else {
-                    for (XLock lockedId : ids) {
-                        lockedId.unlock();
+                    for (XLock lockedKey : lockedKeys) {
+                        lockedKey.unlock();
                     }
                     fail = true;
                     break;
@@ -77,14 +77,14 @@ public class OptimisticLocalLocker implements Locker {
             retry = fail;
         } while (retry);
 
-        return new LocalLockedIds(ids);
+        return new XLockedKeys(lockedKeys);
     }
 
     @Override
     public boolean hasLockedTreads() {
         this.innerLock.lock();
         try {
-            return !this.allLockedIds.isEmpty();
+            return !this.allLockedKeys.isEmpty();
         } finally {
             this.innerLock.unlock();
         }
@@ -95,7 +95,7 @@ public class OptimisticLocalLocker implements Locker {
      *
      * */
     private long generateSleepTime() {
-        if (this.maximumWaitTimeBeforeNewLockAttempt == this.minimumWaitTimeBeforeNewLockAttempt)
+        if (this.maximumWaitTimeBeforeNewLockAttempt == this.minimumWaitTimeBeforeNewLockAttempt) // fix this
             return this.maximumWaitTimeBeforeNewLockAttempt;
 
         return (long) ((Math.random() * (this.maximumWaitTimeBeforeNewLockAttempt - this.minimumWaitTimeBeforeNewLockAttempt)) + this.minimumWaitTimeBeforeNewLockAttempt);
@@ -103,7 +103,7 @@ public class OptimisticLocalLocker implements Locker {
 
     private void remove(XLock xLock) {
         this.innerLock.lock();
-        this.allLockedIds.remove(xLock.getId());
+        this.allLockedKeys.remove(xLock.getKey());
         this.innerLock.unlock();
     }
 
@@ -118,7 +118,7 @@ public class OptimisticLocalLocker implements Locker {
     private XLock getXLock(String id) {
         this.innerLock.lock();
         try {
-            return this.allLockedIds.compute(id, (key, value) -> {
+            return this.allLockedKeys.compute(id, (key, value) -> {
                 if (value == null) {
                     value = new XLock(key);
                 }
@@ -136,11 +136,11 @@ public class OptimisticLocalLocker implements Locker {
      * */
     private class XLock {
         private final ReentrantLock rl = new ReentrantLock();
-        private final String id;
+        private final String key;
         private final Set<Long> threads = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-        public XLock(String id) {
-            this.id = id;
+        public XLock(String key) {
+            this.key = key;
         }
 
         public boolean tryLock() {
@@ -158,15 +158,15 @@ public class OptimisticLocalLocker implements Locker {
             rl.unlock();
         }
 
-        public String getId() {
-            return this.id;
+        public String getKey() {
+            return this.key;
         }
     }
 
-    public class LocalLockedIds implements LockedIds {
+    public class XLockedKeys implements LockedKeys {
         private final List<XLock> locks;
 
-        private LocalLockedIds(List<XLock> locks) {
+        private XLockedKeys(List<XLock> locks) {
             this.locks = locks;
         }
 
@@ -184,9 +184,9 @@ public class OptimisticLocalLocker implements Locker {
 
         @Override
         public String toString() {
-            String result = "Locked ids: ";
+            String result = "Locked keys: ";
             for (XLock xLock : this.locks) {
-                result = result.concat(xLock.id).concat("; ");
+                result = result.concat(xLock.key).concat("; ");
             }
             return result;
         }

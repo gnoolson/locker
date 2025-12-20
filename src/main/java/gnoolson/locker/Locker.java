@@ -2,11 +2,11 @@ package gnoolson.locker;
 
 public interface Locker {
 
-    LockedIds lock(String... ids);
+    LockedKeys lock(String... keys);
 
     boolean hasLockedTreads();
 
-    interface LockedIds extends AutoCloseable {
+    interface LockedKeys extends AutoCloseable {
 
         void release();
 
