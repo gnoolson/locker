@@ -2,6 +2,29 @@
 
 The **Locker** library provides a simple interface for managing access to shared logical resources in a multithreaded environment.
 The `OptimisticLocalLocker` implementation ensures that only one thread can access resources associated with their identifiers at any given time. If an attempt is made to lock resources that are already locked by another thread, the locker waits for the resources to be released and then retries the lock operation. The waiting parameters can be configured through the constructor.
+
+```java
+
+Locker locker = new OptimisticLocalLocker();
+try (Locker.LockedIds lockedIds = locker.lock("resource_id_1", "resource_id_n")) {
+    // do
+}
+```
+
+`Maven`
+```xml
+        <dependency>
+            <groupId>gnoolson.locker</groupId>
+            <artifactId>locker</artifactId>
+            <version>1.1
+            </version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/locker-1.0.jar</systemPath>
+        </dependency>
+```
+
+
+
 ## Simple Example
 
 ```java

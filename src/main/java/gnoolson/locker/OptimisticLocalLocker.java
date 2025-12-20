@@ -138,13 +138,17 @@ public class OptimisticLocalLocker implements Locker {
         private final ReentrantLock rl = new ReentrantLock();
         private final String key;
         private final Set<Long> threads = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        private int counter;
 
         public XLock(String key) {
             this.key = key;
         }
 
         public boolean tryLock() {
-            return this.rl.tryLock();
+            boolean result = this.rl.tryLock();
+            if(result)
+                counter++;
+            return result;
         }
 
         public void busy() {
@@ -152,9 +156,13 @@ public class OptimisticLocalLocker implements Locker {
         }
 
         public void unlock() {
-            this.threads.remove(Thread.currentThread().getId());
-            if (!this.rl.hasQueuedThreads() && this.threads.isEmpty()) OptimisticLocalLocker.this.remove(this);
-
+            counter--;
+            if(counter == 0) {
+                this.threads.remove(Thread.currentThread().getId());
+                if (!this.rl.hasQueuedThreads() && this.threads.isEmpty()) {
+                    OptimisticLocalLocker.this.remove(this);
+                }
+            }
             rl.unlock();
         }
 

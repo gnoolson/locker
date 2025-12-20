@@ -15,8 +15,8 @@ class LockerTest {
 
     private final int threads = 64;
 
-    @RepeatedTest(value = 64, name = "{currentRepetition}/{totalRepetitions}")
-    public void many_lockers() throws InterruptedException {
+    @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
+    public void many_locks() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker();
 
         Counter c1 = new Counter(String.valueOf(1));
@@ -49,7 +49,7 @@ class LockerTest {
         assertFalse(locker.hasLockedTreads());
     }
 
-    @RepeatedTest(value = 64, name = "{currentRepetition}/{totalRepetitions}")
+    @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
     public void single_locker() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker();
 
@@ -71,6 +71,45 @@ class LockerTest {
         assertFalse(locker.hasLockedTreads());
     }
 
+    @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
+    public void lock_inside_lock_with_same_key() throws InterruptedException {
+        Locker locker = new OptimisticLocalLocker(1, 10, 10000);
+
+        ExecutorService ex = Executors.newCachedThreadPool();
+        CountDownLatch cdl = new CountDownLatch(threads * threads * 2);
+        Counter c1 = new Counter(String.valueOf(1));
+        String key = "key1";
+
+        for (int i = 0; i < threads; i++) {
+            ex.submit(() -> {
+                try {
+                    Thread.sleep(1L);
+
+                    try (Locker.LockedKeys lock = locker.lock(key)) {
+
+                        for (int j = 0; j < threads; j++) {
+                            try (Locker.LockedKeys lock2 = locker.lock(key)) {
+                                c1.inc();
+                                cdl.countDown();
+                            }
+
+                            c1.inc();
+                            cdl.countDown();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    System.out.println(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+
+        cdl.await();
+        ex.shutdownNow();
+        assertEquals(threads * threads * 2, c1.value);
+        assertFalse(locker.hasLockedTreads());
+    }
+
     /*
      *
      *
@@ -86,7 +125,7 @@ class LockerTest {
                 ex.submit(() -> {
                     try {
                         Thread.sleep(1L);
-                        try (Locker.LockedIds key = locker.lock(ids)) {
+                        try (Locker.LockedKeys key = locker.lock(ids)) {
                             for (Counter counter : counters) {
                                 counter.inc();
                             }
@@ -94,6 +133,7 @@ class LockerTest {
                             cdl.countDown();
                         }
                     } catch (Exception e) {
+                        System.out.println(e.getMessage());
                         throw new RuntimeException(e);
                     }
                 });
