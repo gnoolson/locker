@@ -4,7 +4,7 @@ public interface Locker {
 
     LockedKeys lock(String... keys);
 
-    boolean hasLockedTreads();
+    int getLockedThreadsSize();
 
     interface LockedKeys extends AutoCloseable {
 

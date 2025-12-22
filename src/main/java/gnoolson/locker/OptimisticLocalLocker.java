@@ -2,15 +2,18 @@ package gnoolson.locker;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class OptimisticLocalLocker implements Locker {
 
+    private final AtomicInteger lockedThreads = new AtomicInteger();
     private final ReentrantLock innerLock = new ReentrantLock();
     private final Map<String, XLock> allLockedKeys = new HashMap<>();
     private final long minimumWaitTimeBeforeNewLockAttempt;
     private final long maximumWaitTimeBeforeNewLockAttempt;
     private final long maximumLockAttemptTime;
+    private final String GLOBAL_LOCK_KEY = "GLOBAL_LOCK";
 
     /*
      *
@@ -40,6 +43,13 @@ public class OptimisticLocalLocker implements Locker {
 
     @Override
     public LockedKeys lock(String... keys) {
+
+        boolean tryGlobalLock = false;
+        if (keys.length == 0) {
+            keys = new String[]{GLOBAL_LOCK_KEY};
+            tryGlobalLock = true;
+        }
+
         boolean retry = false;
         List<XLock> lockedKeys = new ArrayList<>(keys.length);
         long totalSleepTime = 0;
@@ -58,9 +68,9 @@ public class OptimisticLocalLocker implements Locker {
             }
 
             for (String key : keys) {
-                XLock xlock = this.getXLock(key);
-                if (xlock.tryLock()) {
-                    lockedKeys.add(xlock);
+                Optional<XLock> xlockOpt = this.getXLock(key, tryGlobalLock);
+                if(xlockOpt.isPresent() && xlockOpt.get().tryLock()) {
+                    lockedKeys.add(xlockOpt.get());
                 } else {
                     for (XLock lockedKey : lockedKeys) {
                         lockedKey.unlock();
@@ -77,13 +87,8 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     @Override
-    public boolean hasLockedTreads() {
-        this.innerLock.lock();
-        try {
-            return !this.allLockedKeys.isEmpty();
-        } finally {
-            this.innerLock.unlock();
-        }
+    public int getLockedThreadsSize() {
+        return lockedThreads.get();
     }
 
     /*
@@ -108,16 +113,28 @@ public class OptimisticLocalLocker implements Locker {
         }
     }
 
-    private XLock getXLock(String key) {
+    private Optional<XLock> getXLock(String key, boolean tryGlobalLock) {
         this.innerLock.lock();
         try {
-            return this.allLockedKeys.compute(key, (_key, value) -> {
+            if (!tryGlobalLock && allLockedKeys.containsKey(GLOBAL_LOCK_KEY)) {
+                return Optional.empty();
+            }
+
+           if(tryGlobalLock && !allLockedKeys.isEmpty()){
+               if(allLockedKeys.size() != 1 || !allLockedKeys.containsKey(GLOBAL_LOCK_KEY)){
+                   return Optional.empty();
+               }
+           }
+
+           XLock xlock = this.allLockedKeys.compute(key, (_key, value) -> {
                 if (value == null) {
                     value = new XLock(_key);
                 }
                 value.busy();
                 return value;
             });
+
+            return Optional.of(xlock);
         } finally {
             this.innerLock.unlock();
         }
@@ -139,8 +156,12 @@ public class OptimisticLocalLocker implements Locker {
 
         public boolean tryLock() {
             boolean result = this.rl.tryLock();
-            if(result)
-                counter++;
+            if (result) {
+                this.counter++;
+                if (this.counter == 1) {
+                    OptimisticLocalLocker.this.lockedThreads.incrementAndGet();
+                }
+            }
             return result;
         }
 
@@ -149,14 +170,16 @@ public class OptimisticLocalLocker implements Locker {
         }
 
         public void unlock() {
-            counter--;
-            if(counter == 0) {
+            this.counter--;
+            if (this.counter == 0) {
                 this.threads.remove(Thread.currentThread().getId());
                 if (!this.rl.hasQueuedThreads() && this.threads.isEmpty()) {
                     OptimisticLocalLocker.this.remove(this);
                 }
+                OptimisticLocalLocker.this.lockedThreads.decrementAndGet();
             }
-            rl.unlock();
+
+            this.rl.unlock();
         }
 
         public String getKey() {
