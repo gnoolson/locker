@@ -17,16 +17,12 @@ public class OptimisticLocalLocker implements Locker {
      *
      * */
     public OptimisticLocalLocker() {
-        this(1, 10, 1000);
-    }
-
-    public OptimisticLocalLocker(long waitingTimeForTry, long maximumLockAttemptTime) {
-        this(waitingTimeForTry, waitingTimeForTry, maximumLockAttemptTime);
+        this(0, 5, 2000);
     }
 
     public OptimisticLocalLocker(long minimumWaitTimeBeforeNewLockAttempt, long maximumWaitTimeBeforeNewLockAttempt, long maximumLockAttemptTime) {
-        if (minimumWaitTimeBeforeNewLockAttempt < 1)
-            throw new RuntimeException("The minimum time is less than 1 ms");
+        if (minimumWaitTimeBeforeNewLockAttempt < 0)
+            throw new RuntimeException("The minimum time is less than 0 ms");
 
         if (maximumWaitTimeBeforeNewLockAttempt < 1)
             throw new RuntimeException("The maximum time is less than 1 ms");
@@ -52,12 +48,12 @@ public class OptimisticLocalLocker implements Locker {
             boolean fail = false;
             if (retry) {
                 lockedKeys.clear();
-                long sleepTime = this.generateSleepTime();
-                totalSleepTime += sleepTime;
 
                 if (totalSleepTime >= this.maximumLockAttemptTime)
                     throw new RuntimeException(String.format("Could not lock. Too much time to try (%dms)", totalSleepTime));
 
+                long sleepTime = this.generateSleepTime();
+                totalSleepTime += sleepTime;
                 this.sleep(sleepTime);
             }
 
@@ -95,9 +91,6 @@ public class OptimisticLocalLocker implements Locker {
      *
      * */
     private long generateSleepTime() {
-        if (this.maximumWaitTimeBeforeNewLockAttempt == this.minimumWaitTimeBeforeNewLockAttempt) // fix this
-            return this.maximumWaitTimeBeforeNewLockAttempt;
-
         return (long) ((Math.random() * (this.maximumWaitTimeBeforeNewLockAttempt - this.minimumWaitTimeBeforeNewLockAttempt)) + this.minimumWaitTimeBeforeNewLockAttempt);
     }
 
@@ -115,12 +108,12 @@ public class OptimisticLocalLocker implements Locker {
         }
     }
 
-    private XLock getXLock(String id) {
+    private XLock getXLock(String key) {
         this.innerLock.lock();
         try {
-            return this.allLockedKeys.compute(id, (key, value) -> {
+            return this.allLockedKeys.compute(key, (_key, value) -> {
                 if (value == null) {
-                    value = new XLock(key);
+                    value = new XLock(_key);
                 }
                 value.busy();
                 return value;
