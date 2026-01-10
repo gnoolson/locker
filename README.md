@@ -6,8 +6,14 @@ The `OptimisticLocalLocker` implementation ensures that only one thread can acce
 ```java
 
 Locker locker = new OptimisticLocalLocker();
-try (Locker.LockedIds lockedIds = locker.lock("resource_id_1", "resource_id_n")) {
+// lock by key
+try (Locker.LockedKeys lockedKeys = locker.lockKeys("resource_key_1", "resource_key_n")) {
     // do
+}
+
+// full lock
+try (Locker.LockedKeys lockedKeys = locker.lock()) {
+// do
 }
 ```
 
@@ -16,10 +22,9 @@ try (Locker.LockedIds lockedIds = locker.lock("resource_id_1", "resource_id_n"))
         <dependency>
             <groupId>gnoolson.locker</groupId>
             <artifactId>locker</artifactId>
-            <version>1.1
-            </version>
+            <version>1.1.0</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/lib/locker-1.0.jar</systemPath>
+            <systemPath>${project.basedir}/lib/locker-1.1.0.jar</systemPath>
         </dependency>
 ```
 
@@ -53,9 +58,9 @@ public class Example {
         Counter counter_3 = new Counter();
         Counter counter_4 = new Counter();
         Counter counter_5 = new Counter();
-        String[] ids_1 = {"counter_1", "counter_2", "counter_3"};
-        String[] ids_2 = {"counter_2", "counter_3", "counter_4"};
-        String[] ids_3 = {"counter_3", "counter_4", "counter_5"};
+        String[] keys_1 = {"counter_1", "counter_2", "counter_3"};
+        String[] keys_2 = {"counter_2", "counter_3", "counter_4"};
+        String[] keys_3 = {"counter_3", "counter_4", "counter_5"};
 
         int threads = 48;
         ExecutorService ex = Executors.newFixedThreadPool(threads);
@@ -69,7 +74,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedIds lockedIds = locker.lock(ids_1)) {
+                try (Locker.LockedKeys lockedKeys = locker.lockKeys(keys_1)) {
                     counter_1.increment();
                     counter_2.increment();
                     counter_3.increment();
@@ -85,7 +90,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedIds lockedIds = locker.lock(ids_2)) {
+                try (Locker.LockedKeys lockedKeys = locker.lockKeys(keys_2)) {
                     counter_2.increment();
                     counter_3.increment();
                     counter_4.increment();
@@ -93,7 +98,7 @@ public class Example {
                 latch.countDown();
             });
         }
-        
+
         for (int i = 0; i < 16; i++) {
             ex.submit(() -> {
                 try {
@@ -101,7 +106,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedIds lockedIds = locker.lock(ids_3)) {
+                try (Locker.LockedKeys lockedKeys = locker.lockKeys(keys_3)) {
                     counter_3.increment();
                     counter_4.increment();
                     counter_5.increment();
@@ -121,5 +126,3 @@ public class Example {
     }
 
 }
-
-

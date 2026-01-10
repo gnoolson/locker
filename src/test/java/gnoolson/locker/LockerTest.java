@@ -9,6 +9,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class LockerTest {
 
@@ -45,7 +46,7 @@ class LockerTest {
         assertEquals(threads * 5, c4.value);
         assertEquals(threads * 5, c5.value);
         assertEquals(threads * 5, c6.value);
-        assertEquals(0, locker.getLockedThreadsSize());
+        assertFalse(locker.hasLockedThreads());
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
@@ -67,7 +68,7 @@ class LockerTest {
         ex.shutdownNow();
 
         assertEquals(threads * 6, c1.value);
-        assertEquals(0, locker.getLockedThreadsSize());
+        assertFalse(locker.hasLockedThreads());
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
@@ -84,10 +85,10 @@ class LockerTest {
                 try {
                     Thread.sleep(1L);
 
-                    try (Locker.LockedKeys lock = locker.lock(key)) {
+                    try (Locker.LockedKeys lock = locker.lockKeys(key)) {
 
                         for (int j = 0; j < threads; j++) {
-                            try (Locker.LockedKeys lock2 = locker.lock(key)) {
+                            try (Locker.LockedKeys lock2 = locker.lockKeys(key)) {
                                 c1.inc();
                                 cdl.countDown();
                             }
@@ -106,7 +107,7 @@ class LockerTest {
         cdl.await();
         ex.shutdownNow();
         assertEquals(threads * threads * 2, c1.value);
-        assertEquals(0, locker.getLockedThreadsSize());
+        assertFalse(locker.hasLockedThreads());
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
@@ -122,7 +123,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockedKeys lock = locker.lockKeys("key")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -136,7 +137,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock()) { // no key - global lock
+                    try (Locker.LockedKeys lock = locker.lock()) { // global lock
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -153,7 +154,7 @@ class LockerTest {
         ex.shutdownNow();
         assertEquals(threads * 2, c1.value);
         assertEquals(threads * 2, c2.value);
-        assertEquals(0, locker.getLockedThreadsSize());
+        assertFalse(locker.hasLockedThreads());
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
@@ -169,7 +170,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockedKeys lock = locker.lockKeys("key")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -183,7 +184,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock()) { // no key - global lock
+                    try (Locker.LockedKeys lock = locker.lock()) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -210,7 +211,7 @@ class LockerTest {
         ex.shutdownNow();
         assertEquals(threads * 4, c1.value);
         assertEquals(threads * 4, c2.value);
-        assertEquals(0, locker.getLockedThreadsSize());
+        assertFalse(locker.hasLockedThreads());
     }
 
     /*
@@ -228,7 +229,7 @@ class LockerTest {
                 ex.submit(() -> {
                     try {
                         Thread.sleep(1L);
-                        try (Locker.LockedKeys key = locker.lock(ids)) {
+                        try (Locker.LockedKeys key = locker.lockKeys(ids)) {
                             for (Counter counter : counters) {
                                 counter.inc();
                             }

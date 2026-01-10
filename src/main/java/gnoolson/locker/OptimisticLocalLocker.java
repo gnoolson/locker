@@ -2,18 +2,16 @@ package gnoolson.locker;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class OptimisticLocalLocker implements Locker {
 
-    private final AtomicInteger lockedThreads = new AtomicInteger();
+    private static final String GLOBAL_LOCK_KEY = UUID.randomUUID().toString();
     private final ReentrantLock innerLock = new ReentrantLock();
     private final Map<String, XLock> allLockedKeys = new HashMap<>();
     private final long minimumWaitTimeBeforeNewLockAttempt;
     private final long maximumWaitTimeBeforeNewLockAttempt;
     private final long maximumLockAttemptTime;
-    private final String GLOBAL_LOCK_KEY = "GLOBAL_LOCK";
 
     /*
      *
@@ -42,14 +40,30 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     @Override
-    public LockedKeys lock(String... keys) {
+    public LockedKeys lock() {
+        return lock(true, GLOBAL_LOCK_KEY);
+    }
 
-        boolean tryGlobalLock = false;
-        if (keys.length == 0) {
-            keys = new String[]{GLOBAL_LOCK_KEY};
-            tryGlobalLock = true;
+    @Override
+    public LockedKeys lockKeys(String... keys) {
+        return lock(false, keys);
+    }
+
+    @Override
+    public boolean hasLockedThreads() {
+        this.innerLock.lock();
+        try {
+            return !allLockedKeys.isEmpty();
+        } finally {
+            this.innerLock.unlock();
         }
+    }
 
+    /*
+     *
+     *
+     * */
+    private LockedKeys lock(boolean globalLock, String... keys) {
         boolean retry = false;
         List<XLock> lockedKeys = new ArrayList<>(keys.length);
         long totalSleepTime = 0;
@@ -59,8 +73,7 @@ public class OptimisticLocalLocker implements Locker {
             if (retry) {
                 lockedKeys.clear();
 
-                if (totalSleepTime >= this.maximumLockAttemptTime)
-                    throw new RuntimeException(String.format("Could not lock. Too much time to try (%dms)", totalSleepTime));
+                checkAttemptTime(totalSleepTime);
 
                 long sleepTime = this.generateSleepTime();
                 totalSleepTime += sleepTime;
@@ -68,15 +81,28 @@ public class OptimisticLocalLocker implements Locker {
             }
 
             for (String key : keys) {
-                Optional<XLock> xlockOpt = this.getXLock(key, tryGlobalLock);
-                if(xlockOpt.isPresent() && xlockOpt.get().tryLock()) {
-                    lockedKeys.add(xlockOpt.get());
-                } else {
-                    for (XLock lockedKey : lockedKeys) {
-                        lockedKey.unlock();
+                this.innerLock.lock();
+                try {
+                    if(!globalLock && isFullLockAlreadyActive()){
+                        fail = true;
+                        break;
                     }
-                    fail = true;
-                    break;
+
+                    if(globalLock && hasNormalLocks()) {
+                        fail = true;
+                        break;
+                    }
+
+                    XLock xlock = this.getXLock(key);
+                    if (xlock.tryLock()) {
+                        lockedKeys.add(xlock);
+                    } else {
+                        unlockLockedKeys(lockedKeys);
+                        fail = true;
+                        break;
+                    }
+                } finally {
+                    this.innerLock.unlock();
                 }
             }
 
@@ -86,15 +112,28 @@ public class OptimisticLocalLocker implements Locker {
         return new XLockedKeys(lockedKeys);
     }
 
-    @Override
-    public int getLockedThreadsSize() {
-        return lockedThreads.get();
+    private void checkAttemptTime(long totalSleepTime) {
+        if (totalSleepTime >= this.maximumLockAttemptTime)
+            throw new RuntimeException(String.format("Could not lock. Too much time to try (%dms)", totalSleepTime));
     }
 
-    /*
-     *
-     *
-     * */
+    private void unlockLockedKeys(List<XLock> lockedKeys) {
+        for (XLock lockedKey : lockedKeys) {
+            lockedKey.unlock();
+        }
+    }
+
+    private boolean isFullLockAlreadyActive() {
+        return this.allLockedKeys.containsKey(GLOBAL_LOCK_KEY);
+    }
+
+    private boolean hasNormalLocks(){
+        if (!this.allLockedKeys.isEmpty()) {
+            return this.allLockedKeys.size() != 1 || !this.allLockedKeys.containsKey(GLOBAL_LOCK_KEY);
+        }
+        return false;
+    }
+
     private long generateSleepTime() {
         return (long) ((Math.random() * (this.maximumWaitTimeBeforeNewLockAttempt - this.minimumWaitTimeBeforeNewLockAttempt)) + this.minimumWaitTimeBeforeNewLockAttempt);
     }
@@ -113,31 +152,14 @@ public class OptimisticLocalLocker implements Locker {
         }
     }
 
-    private Optional<XLock> getXLock(String key, boolean tryGlobalLock) {
-        this.innerLock.lock();
-        try {
-            if (!tryGlobalLock && allLockedKeys.containsKey(GLOBAL_LOCK_KEY)) {
-                return Optional.empty();
+    private XLock getXLock(String key) {
+        return this.allLockedKeys.compute(key, (_key, value) -> {
+            if (value == null) {
+                value = new XLock(_key);
             }
-
-           if(tryGlobalLock && !allLockedKeys.isEmpty()){
-               if(allLockedKeys.size() != 1 || !allLockedKeys.containsKey(GLOBAL_LOCK_KEY)){
-                   return Optional.empty();
-               }
-           }
-
-           XLock xlock = this.allLockedKeys.compute(key, (_key, value) -> {
-                if (value == null) {
-                    value = new XLock(_key);
-                }
-                value.busy();
-                return value;
-            });
-
-            return Optional.of(xlock);
-        } finally {
-            this.innerLock.unlock();
-        }
+            value.busy();
+            return value;
+        });
     }
 
     /*
@@ -158,9 +180,6 @@ public class OptimisticLocalLocker implements Locker {
             boolean result = this.rl.tryLock();
             if (result) {
                 this.counter++;
-                if (this.counter == 1) {
-                    OptimisticLocalLocker.this.lockedThreads.incrementAndGet();
-                }
             }
             return result;
         }
@@ -176,9 +195,7 @@ public class OptimisticLocalLocker implements Locker {
                 if (!this.rl.hasQueuedThreads() && this.threads.isEmpty()) {
                     OptimisticLocalLocker.this.remove(this);
                 }
-                OptimisticLocalLocker.this.lockedThreads.decrementAndGet();
             }
-
             this.rl.unlock();
         }
 

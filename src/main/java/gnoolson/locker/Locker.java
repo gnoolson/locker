@@ -2,9 +2,11 @@ package gnoolson.locker;
 
 public interface Locker {
 
-    LockedKeys lock(String... keys);
+    LockedKeys lockKeys(String... keys);
 
-    int getLockedThreadsSize();
+    LockedKeys lock();
+
+    boolean hasLockedThreads();
 
     interface LockedKeys extends AutoCloseable {
 
