@@ -2,6 +2,7 @@ package gnoolson.locker;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class OptimisticLocalLocker implements Locker {
@@ -54,6 +55,22 @@ public class OptimisticLocalLocker implements Locker {
         this.innerLock.lock();
         try {
             return !allLockedKeys.isEmpty();
+        } finally {
+            this.innerLock.unlock();
+        }
+    }
+
+    @Override
+    public boolean isKeysLocked(String... keys) {
+        this.innerLock.lock();
+        try {
+            Set<String> lockedKeys = allLockedKeys.keySet();
+            for (String key : keys) {
+                if(lockedKeys.contains(key))
+                    return true;
+            }
+
+            return false;
         } finally {
             this.innerLock.unlock();
         }

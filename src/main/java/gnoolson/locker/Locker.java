@@ -8,6 +8,8 @@ public interface Locker {
 
     boolean hasLockedThreads();
 
+    boolean isKeysLocked(String... keys);
+
     interface LockedKeys extends AutoCloseable {
 
         void release();

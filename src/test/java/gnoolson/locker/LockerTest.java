@@ -1,6 +1,5 @@
 package gnoolson.locker;
 
-
 import org.junit.jupiter.api.RepeatedTest;
 
 import java.util.concurrent.CountDownLatch;
@@ -190,6 +189,63 @@ class LockerTest {
                         cdl.countDown();
 
                         try (Locker.LockedKeys lock2 = locker.lock()) {
+                            c1.inc();
+                            c2.inc();
+                            cdl.countDown();
+                        }
+
+                        c1.inc();
+                        c2.inc();
+                        cdl.countDown();
+                    }
+                } catch (InterruptedException e) {
+                    System.out.println(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+
+
+        cdl.await();
+        ex.shutdownNow();
+        assertEquals(threads * 4, c1.value);
+        assertEquals(threads * 4, c2.value);
+        assertFalse(locker.hasLockedThreads());
+    }
+
+    @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
+    public void lock_inside_global_lock() throws InterruptedException {
+        Locker locker = new OptimisticLocalLocker(1, 10, 10000);
+
+        ExecutorService ex = Executors.newCachedThreadPool();
+        CountDownLatch cdl = new CountDownLatch(threads * 4);
+        Counter c1 = new Counter(String.valueOf(1));
+        Counter c2 = new Counter(String.valueOf(2));
+
+        for (int i = 0; i < threads; i++) {
+            ex.submit(() -> {
+                try {
+                    Thread.sleep(1L);
+                    try (Locker.LockedKeys lock = locker.lockKeys("key")) {
+                        c1.inc();
+                        c2.inc();
+                        cdl.countDown();
+                    }
+                } catch (InterruptedException e) {
+                    System.out.println(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            });
+
+            ex.submit(() -> {
+                try {
+                    Thread.sleep(1L);
+                    try (Locker.LockedKeys lock = locker.lock()) {
+                        c1.inc();
+                        c2.inc();
+                        cdl.countDown();
+
+                        try (Locker.LockedKeys lock2 = locker.lockKeys("key")) {
                             c1.inc();
                             c2.inc();
                             cdl.countDown();
