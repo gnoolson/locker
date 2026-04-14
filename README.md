@@ -19,11 +19,24 @@ try (Locker.LockedKeys lockedKeys = locker.globalLock()) {
 
 `Maven`
 ```xml
+
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
+
+
+    <dependencies>
         <dependency>
-            <groupId>gnoolson.locker</groupId>
+            <groupId>com.github.gnoolson</groupId>
             <artifactId>locker</artifactId>
             <version>1.3.0</version>
         </dependency>
+    </dependencies>
+
+
 ```
 
 
