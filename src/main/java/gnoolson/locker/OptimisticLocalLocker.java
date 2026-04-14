@@ -2,12 +2,11 @@ package gnoolson.locker;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class OptimisticLocalLocker implements Locker {
 
-    private static final String GLOBAL_LOCK_KEY = UUID.randomUUID().toString();
+    private static final String GLOBAL_LOCK_KEY = new Object().toString();
     private final ReentrantLock innerLock = new ReentrantLock();
     private final Map<String, XLock> allLockedKeys = new HashMap<>();
     private final long minimumWaitTimeBeforeNewLockAttempt;
@@ -41,12 +40,12 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     @Override
-    public LockedKeys lock() {
+    public LockedKeys globalLock() {
         return lock(true, GLOBAL_LOCK_KEY);
     }
 
     @Override
-    public LockedKeys lockKeys(String... keys) {
+    public LockedKeys lock(String... keys) {
         return lock(false, keys);
     }
 
@@ -100,14 +99,18 @@ public class OptimisticLocalLocker implements Locker {
             for (String key : keys) {
                 this.innerLock.lock();
                 try {
-                    if(!globalLock && isFullLockAlreadyActive()){
-                        fail = true;
-                        break;
+                    if(!globalLock && isGlobalLockAlreadyActive()){
+                        if (!isGlobalLockOwnedByCurrentThread()) {
+                            fail = true;
+                            break;
+                        }
                     }
 
                     if(globalLock && hasNormalLocks()) {
-                        fail = true;
-                        break;
+                        if (!areAllLocksOwnedByCurrentThread()) {
+                            fail = true;
+                            break;
+                        }
                     }
 
                     XLock xlock = this.getXLock(key);
@@ -129,6 +132,14 @@ public class OptimisticLocalLocker implements Locker {
         return new XLockedKeys(lockedKeys);
     }
 
+    private boolean isGlobalLockOwnedByCurrentThread() {
+        XLock lock = allLockedKeys.get(GLOBAL_LOCK_KEY);
+        if (lock == null)
+            return false;
+
+        return lock.isOwnedBy(Thread.currentThread().getId());
+    }
+
     private void checkAttemptTime(long totalSleepTime) {
         if (totalSleepTime >= this.maximumLockAttemptTime)
             throw new RuntimeException(String.format("Could not lock. Too much time to try (%dms)", totalSleepTime));
@@ -140,7 +151,18 @@ public class OptimisticLocalLocker implements Locker {
         }
     }
 
-    private boolean isFullLockAlreadyActive() {
+    private boolean areAllLocksOwnedByCurrentThread() {
+        long threadId = Thread.currentThread().getId();
+
+        for (XLock lock : allLockedKeys.values()) {
+            if (!lock.isOwnedBy(threadId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isGlobalLockAlreadyActive() {
         return this.allLockedKeys.containsKey(GLOBAL_LOCK_KEY);
     }
 
@@ -191,6 +213,10 @@ public class OptimisticLocalLocker implements Locker {
 
         public XLock(String key) {
             this.key = key;
+        }
+
+        public boolean isOwnedBy(long threadId) {
+            return threads.contains(threadId);
         }
 
         public boolean tryLock() {

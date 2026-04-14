@@ -2,9 +2,9 @@ package gnoolson.locker;
 
 public interface Locker {
 
-    LockedKeys lockKeys(String... keys);
+    LockedKeys lock(String... keys);
 
-    LockedKeys lock();
+    LockedKeys globalLock();
 
     boolean hasLockedThreads();
 

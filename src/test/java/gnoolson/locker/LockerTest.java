@@ -71,7 +71,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void lock_inside_lock_with_same_key() throws InterruptedException {
+    public void lock_inside_globalLock_with_same_key() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -84,10 +84,10 @@ class LockerTest {
                 try {
                     Thread.sleep(1L);
 
-                    try (Locker.LockedKeys lock = locker.lockKeys(key)) {
+                    try (Locker.LockedKeys lock = locker.lock(key)) {
 
                         for (int j = 0; j < threads; j++) {
-                            try (Locker.LockedKeys lock2 = locker.lockKeys(key)) {
+                            try (Locker.LockedKeys lock2 = locker.lock(key)) {
                                 c1.inc();
                                 cdl.countDown();
                             }
@@ -110,7 +110,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void global_lock() throws InterruptedException {
+    public void global_globalLock() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -122,7 +122,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lockKeys("key")) {
+                    try (Locker.LockedKeys lock = locker.lock("key")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -136,7 +136,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock()) { // global lock
+                    try (Locker.LockedKeys lock = locker.globalLock()) { // global lock
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -157,7 +157,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void global_lock_inside_global_lock() throws InterruptedException {
+    public void global_lock_inside_global_globalLock() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -169,7 +169,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lockKeys("key")) {
+                    try (Locker.LockedKeys lock = locker.lock("key")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -183,12 +183,12 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock()) {
+                    try (Locker.LockedKeys lock = locker.globalLock()) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
 
-                        try (Locker.LockedKeys lock2 = locker.lock()) {
+                        try (Locker.LockedKeys lock2 = locker.globalLock()) {
                             c1.inc();
                             c2.inc();
                             cdl.countDown();
@@ -214,7 +214,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void lock_inside_global_lock() throws InterruptedException {
+    public void lock_inside_global_globalLock() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -226,7 +226,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lockKeys("key")) {
+                    try (Locker.LockedKeys lock = locker.lock("key")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -240,12 +240,12 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock()) {
+                    try (Locker.LockedKeys lock = locker.globalLock()) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
 
-                        try (Locker.LockedKeys lock2 = locker.lockKeys("key")) {
+                        try (Locker.LockedKeys lock2 = locker.lock("key")) {
                             c1.inc();
                             c2.inc();
                             cdl.countDown();
@@ -285,7 +285,7 @@ class LockerTest {
                 ex.submit(() -> {
                     try {
                         Thread.sleep(1L);
-                        try (Locker.LockedKeys key = locker.lockKeys(ids)) {
+                        try (Locker.LockedKeys key = locker.lock(ids)) {
                             for (Counter counter : counters) {
                                 counter.inc();
                             }

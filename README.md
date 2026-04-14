@@ -6,13 +6,13 @@ The `OptimisticLocalLocker` implementation ensures that only one thread can acce
 ```java
 
 Locker locker = new OptimisticLocalLocker();
-// lock by key
-try (Locker.LockedKeys lockedKeys = locker.lockKeys("resource_key_1", "resource_key_n")) {
+// lock by keys
+try (Locker.LockedKeys lockedKeys = locker.lock("resource_key_1", "resource_key_n")) {
     // do
 }
 
-// full lock
-try (Locker.LockedKeys lockedKeys = locker.lock()) {
+// global lock
+try (Locker.LockedKeys lockedKeys = locker.globalLock()) {
 // do
 }
 ```
@@ -22,9 +22,7 @@ try (Locker.LockedKeys lockedKeys = locker.lock()) {
         <dependency>
             <groupId>gnoolson.locker</groupId>
             <artifactId>locker</artifactId>
-            <version>1.1.0</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/lib/locker-1.1.0.jar</systemPath>
+            <version>1.3.0</version>
         </dependency>
 ```
 
@@ -74,7 +72,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedKeys lockedKeys = locker.lockKeys(keys_1)) {
+                try (Locker.LockedKeys lockedKeys = locker.lock(keys_1)) {
                     counter_1.increment();
                     counter_2.increment();
                     counter_3.increment();
@@ -90,7 +88,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedKeys lockedKeys = locker.lockKeys(keys_2)) {
+                try (Locker.LockedKeys lockedKeys = locker.lock(keys_2)) {
                     counter_2.increment();
                     counter_3.increment();
                     counter_4.increment();
@@ -106,7 +104,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedKeys lockedKeys = locker.lockKeys(keys_3)) {
+                try (Locker.LockedKeys lockedKeys = locker.lock(keys_3)) {
                     counter_3.increment();
                     counter_4.increment();
                     counter_5.increment();
