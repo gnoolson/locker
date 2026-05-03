@@ -32,7 +32,7 @@ try (Locker.LockedKeys lockedKeys = locker.globalLock()) {
         <dependency>
             <groupId>com.github.gnoolson</groupId>
             <artifactId>locker</artifactId>
-            <version>1.3.0</version>
+            <version>1.4.0</version>
         </dependency>
     </dependencies>
 
