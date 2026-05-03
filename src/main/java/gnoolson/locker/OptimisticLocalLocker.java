@@ -60,7 +60,7 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     @Override
-    public boolean isKeysLocked(String... keys) {
+    public boolean areKeysLocked(String... keys) {
         this.innerLock.lock();
         try {
             Set<String> lockedKeys = allLockedKeys.keySet();
