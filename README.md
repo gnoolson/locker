@@ -1,23 +1,27 @@
 # Locker
 
 The **Locker** library provides a simple interface for managing access to shared logical resources in a multithreaded environment.
-The `OptimisticLocalLocker` implementation ensures that only one thread can access resources associated with their identifiers at any given time. If an attempt is made to lock resources that are already locked by another thread, the locker waits for the resources to be released and then retries the lock operation. The waiting parameters can be configured through the constructor.
+The `OptimisticLocalLocker` implementation ensures that only one thread can access resources associated with their identifiers at any given time. 
+If an attempt is made to lock resources that are already locked by another thread, the locker waits for the resources to be released and then retries the lock operation. 
+The waiting parameters can be configured through the constructor.  
+
+**Main methods:**  
+* `LockHandle lockIds(String... ids);` - attempts to lock the specified identifiers.  
+* `LockHandle lockGlobal();` - attempts to acquire a global lock (this is equivalent to locking all possible identifiers).  
 
 ```java
 
 Locker locker = new OptimisticLocalLocker();
-// lock by keys
-try (Locker.LockedKeys lockedKeys = locker.lock("resource_key_1", "resource_key_n")) {
+try (Locker.LockHandle ignore = locker.lockIds("id_1", "id_2", "id_n")) {
     // do
 }
 
-// global lock
-try (Locker.LockedKeys lockedKeys = locker.globalLock()) {
-// do
+try (Locker.LockHandle ignore = locker.lockGlobal()) {
+    // do
 }
 ```
 
-`Maven`
+**Maven**  
 ```xml
 
     <repositories>
@@ -32,7 +36,7 @@ try (Locker.LockedKeys lockedKeys = locker.globalLock()) {
         <dependency>
             <groupId>com.github.gnoolson</groupId>
             <artifactId>locker</artifactId>
-            <version>1.4.0</version>
+            <version>2.0.0</version>
         </dependency>
     </dependencies>
 
@@ -41,17 +45,9 @@ try (Locker.LockedKeys lockedKeys = locker.globalLock()) {
 
 
 
-## Simple Example
+## Example
 
 ```java
-package example;
-
-import gnoolson.locker.Locker;
-import gnoolson.locker.OptimisticLocalLocker;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class Example {
 
@@ -69,11 +65,11 @@ public class Example {
         Counter counter_3 = new Counter();
         Counter counter_4 = new Counter();
         Counter counter_5 = new Counter();
-        String[] keys_1 = {"counter_1", "counter_2", "counter_3"};
-        String[] keys_2 = {"counter_2", "counter_3", "counter_4"};
-        String[] keys_3 = {"counter_3", "counter_4", "counter_5"};
+        String[] ids_1 = {"counter_1", "counter_2", "counter_3"};
+        String[] ids_2 = {"counter_2", "counter_3", "counter_4"};
+        String[] ids_3 = {"counter_3", "counter_4", "counter_5"};
 
-        int threads = 48;
+        int threads = 16 * 3;
         ExecutorService ex = Executors.newFixedThreadPool(threads);
         CountDownLatch latch = new CountDownLatch(threads);
         Locker locker = new OptimisticLocalLocker();
@@ -85,7 +81,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedKeys lockedKeys = locker.lock(keys_1)) {
+                try (Locker.LockHandle ignore = locker.lockIds(ids_1)) {
                     counter_1.increment();
                     counter_2.increment();
                     counter_3.increment();
@@ -101,7 +97,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedKeys lockedKeys = locker.lock(keys_2)) {
+                try (Locker.LockHandle ignore = locker.lockIds(ids_2)) {
                     counter_2.increment();
                     counter_3.increment();
                     counter_4.increment();
@@ -117,7 +113,7 @@ public class Example {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                try (Locker.LockedKeys lockedKeys = locker.lock(keys_3)) {
+                try (Locker.LockHandle ignore = locker.lockIds(ids_3)) {
                     counter_3.increment();
                     counter_4.increment();
                     counter_5.increment();
@@ -137,3 +133,5 @@ public class Example {
     }
 
 }
+
+```  

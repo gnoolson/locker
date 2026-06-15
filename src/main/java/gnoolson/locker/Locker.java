@@ -2,18 +2,13 @@ package gnoolson.locker;
 
 public interface Locker {
 
-    LockedKeys lock(String... keys);
+    LockHandle lockIds(String... ids);
 
-    LockedKeys globalLock();
+    LockHandle lockGlobal();
 
     boolean hasLockedThreads();
 
-    boolean areKeysLocked(String... keys);
-
-    interface LockedKeys extends AutoCloseable {
-
-        void release();
-
+    interface LockHandle extends AutoCloseable {
         @Override
         void close();
     }

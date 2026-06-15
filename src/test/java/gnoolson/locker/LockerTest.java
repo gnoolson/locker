@@ -49,7 +49,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void single_locker() throws InterruptedException {
+    public void single_lock() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker();
 
         Counter c1 = new Counter(String.valueOf(1));
@@ -71,23 +71,23 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void lock_inside_lock_with_same_key() throws InterruptedException {
+    public void lock_inside_lock_with_same_id() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
         CountDownLatch cdl = new CountDownLatch(threads * threads * 2);
         Counter c1 = new Counter(String.valueOf(1));
-        String key = "key1";
+        String id = "id_1";
 
         for (int i = 0; i < threads; i++) {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
 
-                    try (Locker.LockedKeys lock = locker.lock(key)) {
+                    try (Locker.LockHandle ignore = locker.lockIds(id)) {
 
                         for (int j = 0; j < threads; j++) {
-                            try (Locker.LockedKeys lock2 = locker.lock(key)) {
+                            try (Locker.LockHandle ignore2 = locker.lockIds(id)) {
                                 c1.inc();
                                 cdl.countDown();
                             }
@@ -110,7 +110,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void global_lock() throws InterruptedException {
+    public void lock_global() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -122,7 +122,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockHandle ignore = locker.lockIds("id_1")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -136,7 +136,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.globalLock()) { // global lock
+                    try (Locker.LockHandle ignore = locker.lockGlobal()) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -157,7 +157,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void global_lock_inside_global_lock() throws InterruptedException {
+    public void lock_global_inside_lock_global() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -169,7 +169,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockHandle ignore = locker.lockIds("id_1")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -183,12 +183,12 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.globalLock()) {
+                    try (Locker.LockHandle ignore = locker.lockGlobal()) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
 
-                        try (Locker.LockedKeys lock2 = locker.globalLock()) {
+                        try (Locker.LockHandle ignore2 = locker.lockGlobal()) {
                             c1.inc();
                             c2.inc();
                             cdl.countDown();
@@ -214,7 +214,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void lock_inside_global_lock() throws InterruptedException {
+    public void lock_inside_lock_global() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -226,7 +226,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockHandle ignore = locker.lockIds("id_1")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -240,12 +240,12 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.globalLock()) {
+                    try (Locker.LockHandle ignore = locker.lockGlobal()) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
 
-                        try (Locker.LockedKeys lock2 = locker.lock("key")) {
+                        try (Locker.LockHandle ignore2 = locker.lockIds("id_1")) {
                             c1.inc();
                             c2.inc();
                             cdl.countDown();
@@ -271,7 +271,7 @@ class LockerTest {
     }
 
     @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
-    public void global_lock_inside_lock() throws InterruptedException {
+    public void lock_global_inside_lock() throws InterruptedException {
         Locker locker = new OptimisticLocalLocker(1, 10, 10000);
 
         ExecutorService ex = Executors.newCachedThreadPool();
@@ -283,7 +283,7 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockHandle ignore = locker.lockIds("id_1")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
@@ -297,12 +297,12 @@ class LockerTest {
             ex.submit(() -> {
                 try {
                     Thread.sleep(1L);
-                    try (Locker.LockedKeys lock = locker.lock("key")) {
+                    try (Locker.LockHandle ignore = locker.lockIds("id_1")) {
                         c1.inc();
                         c2.inc();
                         cdl.countDown();
 
-                        try (Locker.LockedKeys lock2 = locker.globalLock()) {
+                        try (Locker.LockHandle ignore2 = locker.lockGlobal()) {
                             c1.inc();
                             c2.inc();
                             cdl.countDown();
@@ -319,6 +319,76 @@ class LockerTest {
             });
         }
 
+
+        cdl.await();
+        ex.shutdownNow();
+        assertEquals(threads * 4, c1.value);
+        assertEquals(threads * 4, c2.value);
+        assertFalse(locker.hasLockedThreads());
+    }
+
+    @RepeatedTest(value = 128, name = "{currentRepetition}/{totalRepetitions}")
+    public void many_closes() throws InterruptedException {
+        Locker locker = new OptimisticLocalLocker(1, 10, 10000);
+
+        ExecutorService ex = Executors.newCachedThreadPool();
+        CountDownLatch cdl = new CountDownLatch(threads * 4);
+        Counter c1 = new Counter(String.valueOf(1));
+        Counter c2 = new Counter(String.valueOf(2));
+
+        for (int i = 0; i < threads; i++) {
+            ex.submit(() -> {
+                try {
+                    Thread.sleep(1L);
+                    Locker.LockHandle lockHandle = locker.lockIds("id_1");
+                    c1.inc();
+                    c2.inc();
+                    cdl.countDown();
+
+                    lockHandle.close();
+                    lockHandle.close();
+                    lockHandle.close();
+                    lockHandle.close();
+
+                } catch (InterruptedException e) {
+                    System.out.println(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            });
+
+            ex.submit(() -> {
+                try {
+                    Thread.sleep(1L);
+                    Locker.LockHandle lockHandle = locker.lockIds("id_1");
+                    c1.inc();
+                    c2.inc();
+                    cdl.countDown();
+
+                    Locker.LockHandle lockHandle2 = locker.lockGlobal();
+                    c1.inc();
+                    c2.inc();
+                    cdl.countDown();
+
+                    lockHandle2.close();
+                    lockHandle2.close();
+                    lockHandle2.close();
+                    lockHandle2.close();
+
+                    c1.inc();
+                    c2.inc();
+                    cdl.countDown();
+
+                    lockHandle.close();
+                    lockHandle.close();
+                    lockHandle.close();
+                    lockHandle.close();
+
+                } catch (InterruptedException e) {
+                    System.out.println(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            });
+        }
 
         cdl.await();
         ex.shutdownNow();
@@ -342,7 +412,7 @@ class LockerTest {
                 ex.submit(() -> {
                     try {
                         Thread.sleep(1L);
-                        try (Locker.LockedKeys key = locker.lock(ids)) {
+                        try (Locker.LockHandle ignore = locker.lockIds(ids)) {
                             for (Counter counter : counters) {
                                 counter.inc();
                             }

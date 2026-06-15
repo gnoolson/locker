@@ -6,9 +6,9 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class OptimisticLocalLocker implements Locker {
 
-    private static final String GLOBAL_LOCK_KEY = new Object().toString();
+    private final String GLOBAL_LOCK_ID = new Object().toString();
     private final ReentrantLock innerLock = new ReentrantLock();
-    private final Map<String, XLock> allLockedKeys = new HashMap<>();
+    private final Map<String, XLock> allLockedIds = new HashMap<>();
     private final long minimumWaitTimeBeforeNewLockAttempt;
     private final long maximumWaitTimeBeforeNewLockAttempt;
     private final long maximumLockAttemptTime;
@@ -40,36 +40,21 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     @Override
-    public LockedKeys globalLock() {
-        return lock(true, GLOBAL_LOCK_KEY);
+    public LockHandle lockGlobal() {
+        List<XLock> lockedIds = lockIds(true, GLOBAL_LOCK_ID);
+        return new XLockHandle(lockedIds);
     }
 
     @Override
-    public LockedKeys lock(String... keys) {
-        return lock(false, keys);
+    public LockHandle lockIds(String... ids) {
+        return new XLockHandle(lockIds(false, ids));
     }
 
     @Override
     public boolean hasLockedThreads() {
         this.innerLock.lock();
         try {
-            return !allLockedKeys.isEmpty();
-        } finally {
-            this.innerLock.unlock();
-        }
-    }
-
-    @Override
-    public boolean areKeysLocked(String... keys) {
-        this.innerLock.lock();
-        try {
-            Set<String> lockedKeys = allLockedKeys.keySet();
-            for (String key : keys) {
-                if(lockedKeys.contains(key))
-                    return true;
-            }
-
-            return false;
+            return !allLockedIds.isEmpty();
         } finally {
             this.innerLock.unlock();
         }
@@ -79,15 +64,15 @@ public class OptimisticLocalLocker implements Locker {
      *
      *
      * */
-    private LockedKeys lock(boolean globalLock, String... keys) {
+    private List<XLock> lockIds(boolean globalLock, String... ids) {
         boolean retry = false;
-        List<XLock> lockedKeys = new ArrayList<>(keys.length);
+        List<XLock> lockedIds = new ArrayList<>(ids.length);
         long totalSleepTime = 0;
 
         do {
             boolean fail = false;
             if (retry) {
-                lockedKeys.clear();
+                lockedIds.clear();
 
                 checkAttemptTime(totalSleepTime);
 
@@ -96,28 +81,28 @@ public class OptimisticLocalLocker implements Locker {
                 this.sleep(sleepTime);
             }
 
-            for (String key : keys) {
+            for (String id : ids) {
                 this.innerLock.lock();
                 try {
-                    if(!globalLock && isGlobalLockAlreadyActive()){
+                    if (!globalLock && isGlobalLockAlreadyActive()) {
                         if (!isGlobalLockOwnedByCurrentThread()) {
                             fail = true;
                             break;
                         }
                     }
 
-                    if(globalLock && hasNormalLocks()) {
+                    if (globalLock && hasNormalLocks()) {
                         if (!areAllLocksOwnedByCurrentThread()) {
                             fail = true;
                             break;
                         }
                     }
 
-                    XLock xlock = this.getXLock(key);
+                    XLock xlock = this.getXLock(id);
                     if (xlock.tryLock()) {
-                        lockedKeys.add(xlock);
+                        lockedIds.add(xlock);
                     } else {
-                        unlockLockedKeys(lockedKeys);
+                        unlockLockedIds(lockedIds);
                         fail = true;
                         break;
                     }
@@ -129,11 +114,11 @@ public class OptimisticLocalLocker implements Locker {
             retry = fail;
         } while (retry);
 
-        return new XLockedKeys(lockedKeys);
+        return lockedIds;
     }
 
     private boolean isGlobalLockOwnedByCurrentThread() {
-        XLock lock = allLockedKeys.get(GLOBAL_LOCK_KEY);
+        XLock lock = allLockedIds.get(GLOBAL_LOCK_ID);
         if (lock == null)
             return false;
 
@@ -145,16 +130,16 @@ public class OptimisticLocalLocker implements Locker {
             throw new RuntimeException(String.format("Could not lock. Too much time to try (%dms)", totalSleepTime));
     }
 
-    private void unlockLockedKeys(List<XLock> lockedKeys) {
-        for (XLock lockedKey : lockedKeys) {
-            lockedKey.unlock();
+    private void unlockLockedIds(List<XLock> lockedIds) {
+        for (XLock lockedId : lockedIds) {
+            lockedId.unlock();
         }
     }
 
     private boolean areAllLocksOwnedByCurrentThread() {
         long threadId = Thread.currentThread().getId();
 
-        for (XLock lock : allLockedKeys.values()) {
+        for (XLock lock : allLockedIds.values()) {
             if (!lock.isOwnedBy(threadId)) {
                 return false;
             }
@@ -163,12 +148,12 @@ public class OptimisticLocalLocker implements Locker {
     }
 
     private boolean isGlobalLockAlreadyActive() {
-        return this.allLockedKeys.containsKey(GLOBAL_LOCK_KEY);
+        return this.allLockedIds.containsKey(GLOBAL_LOCK_ID);
     }
 
-    private boolean hasNormalLocks(){
-        if (!this.allLockedKeys.isEmpty()) {
-            return this.allLockedKeys.size() != 1 || !this.allLockedKeys.containsKey(GLOBAL_LOCK_KEY);
+    private boolean hasNormalLocks() {
+        if (!this.allLockedIds.isEmpty()) {
+            return this.allLockedIds.size() != 1 || !this.allLockedIds.containsKey(GLOBAL_LOCK_ID);
         }
         return false;
     }
@@ -179,7 +164,7 @@ public class OptimisticLocalLocker implements Locker {
 
     private void remove(XLock xLock) {
         this.innerLock.lock();
-        this.allLockedKeys.remove(xLock.getKey());
+        this.allLockedIds.remove(xLock.getId());
         this.innerLock.unlock();
     }
 
@@ -191,10 +176,10 @@ public class OptimisticLocalLocker implements Locker {
         }
     }
 
-    private XLock getXLock(String key) {
-        return this.allLockedKeys.compute(key, (_key, value) -> {
+    private XLock getXLock(String id) {
+        return this.allLockedIds.compute(id, (_id, value) -> {
             if (value == null) {
-                value = new XLock(_key);
+                value = new XLock(_id);
             }
             value.busy();
             return value;
@@ -207,19 +192,19 @@ public class OptimisticLocalLocker implements Locker {
      * */
     private class XLock {
         private final ReentrantLock rl = new ReentrantLock();
-        private final String key;
+        private final String id;
         private final Set<Long> threads = Collections.newSetFromMap(new ConcurrentHashMap<>());
         private int counter;
 
-        public XLock(String key) {
-            this.key = key;
+        private XLock(String id) {
+            this.id = id;
         }
 
-        public boolean isOwnedBy(long threadId) {
+        private boolean isOwnedBy(long threadId) {
             return threads.contains(threadId);
         }
 
-        public boolean tryLock() {
+        private boolean tryLock() {
             boolean result = this.rl.tryLock();
             if (result) {
                 this.counter++;
@@ -227,11 +212,11 @@ public class OptimisticLocalLocker implements Locker {
             return result;
         }
 
-        public void busy() {
+        private void busy() {
             this.threads.add(Thread.currentThread().getId());
         }
 
-        public void unlock() {
+        private void unlock() {
             this.counter--;
             if (this.counter == 0) {
                 this.threads.remove(Thread.currentThread().getId());
@@ -242,35 +227,35 @@ public class OptimisticLocalLocker implements Locker {
             this.rl.unlock();
         }
 
-        public String getKey() {
-            return this.key;
+        private String getId() {
+            return this.id;
         }
     }
 
-    public class XLockedKeys implements LockedKeys {
+    public class XLockHandle implements LockHandle {
         private final List<XLock> locks;
+        private boolean unlocked;
 
-        private XLockedKeys(List<XLock> locks) {
+        private XLockHandle(List<XLock> locks) {
             this.locks = locks;
         }
 
         @Override
         public void close() {
-            this.release();
-        }
+            if (this.unlocked)
+                return;
 
-        @Override
-        public void release() {
             for (XLock xlock : this.locks) {
                 xlock.unlock();
             }
+            this.unlocked = true;
         }
 
         @Override
         public String toString() {
-            String result = "Locked keys: ";
+            String result = "XLockedIds: ";
             for (XLock xLock : this.locks) {
-                result = result.concat(xLock.key).concat("; ");
+                result = result.concat(xLock.id).concat("; ");
             }
             return result;
         }
